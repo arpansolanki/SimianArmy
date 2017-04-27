@@ -54,9 +54,9 @@ public class DynamoTableHasStream implements ConformityRule {
         AWSClient client = getAwsClient(cluster.getRegion());
         if(cluster.getType()=="DYNAMODB_TABLE") {
             boolean hasStream = client.dynamoTableHasStream(cluster.getName());
-            if (!hasStream) {
+            //if (!hasStream) {
                 failedTables.add(cluster.getName());
-            }
+            //}
             failedComponents.addAll(failedTables);
         }//end of if for dynamodb tables
         return new Conformity(getName(), failedComponents);
