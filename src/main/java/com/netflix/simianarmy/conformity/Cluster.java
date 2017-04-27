@@ -57,6 +57,7 @@ public class Cluster {
     private boolean isConforming;
     private boolean isOptOutOfConformity;
     private final Set<String> soloInstances = Sets.newHashSet();
+	private String type="";
 
     /**
      * Constructor.
@@ -92,6 +93,19 @@ public class Cluster {
         for (String soleInstance : soloInstances) {
             this.soloInstances.add(soleInstance);
         }
+    }
+	
+	public Cluster(String name, String region, String type) {
+        Validate.notNull(name);
+        Validate.notNull(region);
+        Validate.notNull(type);
+        this.name = name;
+        this.region = region;
+        this.type = type;
+    }
+	
+	public String getType(){
+        return type;
     }
 
     /**

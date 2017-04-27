@@ -46,6 +46,7 @@ import com.netflix.simianarmy.aws.conformity.rule.InstanceInVPC;
 import com.netflix.simianarmy.aws.conformity.rule.InstanceIsHealthyInEureka;
 import com.netflix.simianarmy.aws.conformity.rule.InstanceTooOld;
 import com.netflix.simianarmy.aws.conformity.rule.SameZonesInElbAndAsg;
+import com.netflix.simianarmy.aws.conformity.rule.DynamoTableHasStream;
 import com.netflix.simianarmy.basic.BasicSimianArmyContext;
 import com.netflix.simianarmy.client.aws.AWSClient;
 import com.netflix.simianarmy.conformity.ClusterCrawler;
@@ -174,6 +175,11 @@ public class BasicConformityMonkeyContext extends BasicSimianArmyContext impleme
                 "simianarmy.conformity.rule.CrossZoneLoadBalancing.enabled", false)) {
                 ruleEngine().addRule(new CrossZoneLoadBalancing(getAwsCredentialsProvider()));
         }
+		
+		 if (configuration().getBoolOrElse(
+                "simianarmy.conformity.rule.Dynamodbtablestream.enabled", false)) {
+            ruleEngine().addRule(new DynamoTableHasStream(getAwsCredentialsProvider()));
+		}
         
         createClient(region());
         regionToAwsClient.put(region(), awsClient());

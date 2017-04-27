@@ -130,6 +130,14 @@ public class AWSClusterCrawler implements ClusterCrawler {
                 updateCluster(cluster);
                 list.add(cluster);
             }
+			
+			 /////start of adding dynamodb table as a cluster/////////////////////////////
+            List<String> dynamodbTables = awsClient.getDynamodbTableNames();
+            for(String tableName : dynamodbTables){
+                Cluster tableCluster = new Cluster(tableName, region, "DYNAMO_TABLE");
+                list.add(tableCluster);
+            }
+            ///////////////end of cluster for dynamotables
         }
         return list;
     }

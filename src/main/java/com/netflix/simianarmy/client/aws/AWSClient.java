@@ -60,6 +60,11 @@ import org.jclouds.ssh.SshClient;
 import org.jclouds.ssh.jsch.config.JschSshClientModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.model.DescribeTableResult;
+import com.amazonaws.services.dynamodbv2.model.ListTablesRequest;
+import com.amazonaws.services.dynamodbv2.model.ListTablesResult;
+import com.amazonaws.services.dynamodbv2.model.StreamSpecification;
 
 import java.util.*;
 
@@ -316,6 +321,47 @@ public class AWSClient implements CloudClient {
             client.setEndpoint("sdb." + region + ".amazonaws.com");
         }
         return client;
+    }
+	
+	 /**
+     * Amazon ELB client. Abstracted to aid testing.
+     *
+     * @return the Amazon ELB client
+     */
+    protected AmazonDynamoDBClient dynamodbClient() {
+        AmazonDynamoDBClient client;
+        if (awsClientConfig == null) {
+            if (awsCredentialsProvider == null) {
+                client = new AmazonDynamoDBClient();
+            } else {
+                client = new AmazonDynamoDBClient(awsCredentialsProvider);
+            }
+        } else {
+            if (awsCredentialsProvider == null) {
+                client = new AmazonDynamoDBClient(awsClientConfig);
+            } else {
+                client = new AmazonDynamoDBClient(awsCredentialsProvider, awsClientConfig);
+            }
+        }
+        //client.setEndpoint("elasticloadbalancing." + region + ".amazonaws.com");
+        return client;
+    }
+	
+	public List<String> getDynamodbTableNames(){
+        AmazonDynamoDBClient dynamoDBClient = dynamodbClient();
+        ListTablesResult result = dynamoDBClient.listTables();
+        List<String> tableNames = result.getTableNames();
+        return tableNames;
+    }
+	
+	public boolean dynamoTableHasStream(String tableName){
+        AmazonDynamoDBClient dynamoDBClient = dynamodbClient();
+        DescribeTableResult describeTableResult = dynamoDBClient.describeTable(tableName);
+        StreamSpecification myStreamSpec =
+                describeTableResult.getTable().getStreamSpecification();
+        if(myStreamSpec==null)
+            return false;
+        return true;
     }
     
     /**
