@@ -63,8 +63,10 @@ public class BeanstalkLogGroupHasSubscription implements ConformityRule {
         Collection<String> failedComponents = Lists.newArrayList();
         AWSClient client = getAwsClient(cluster.getRegion());
         if(cluster.getType()=="BEANSTALK") {
+            LOGGER.info("cluster type is beanstalk" +cluster.getName());
             boolean hasStream = client.beanstalkHasLogStream(cluster.getName());
             if (!hasStream) {
+                LOGGER.info(("beanstalk does not have stream"));
                 failedBeanstalks.add(cluster.getName());
             }
             failedComponents.addAll(failedBeanstalks);

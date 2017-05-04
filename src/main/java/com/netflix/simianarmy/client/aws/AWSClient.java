@@ -427,12 +427,15 @@ public class AWSClient implements CloudClient {
     }
 
     public List<String> getBeanStalkNames(){
+        LOGGER.info("calling beanstalk names method");
         AWSElasticBeanstalkClient beanstalkClient = beanstalkClient();
         List<String> beanstalks = new ArrayList<String>();
         List<EnvironmentDescription> environments = beanstalkClient.describeEnvironments().getEnvironments();
         for(EnvironmentDescription environment: environments){
+            LOGGER.info("adding beanstalk name "+environment.getEnvironmentName());
             beanstalks.add(environment.getEnvironmentName());
         }
+        LOGGER.info("total number of beanstalk found"+beanstalks.size());
         return beanstalks;
     }
 

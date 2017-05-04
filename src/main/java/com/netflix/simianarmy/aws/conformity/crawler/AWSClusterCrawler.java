@@ -134,14 +134,17 @@ public class AWSClusterCrawler implements ClusterCrawler {
 			 /////start of adding dynamodb table as a cluster/////////////////////////////
             List<String> dynamodbTables = awsClient.getDynamodbTableNames();
             for(String tableName : dynamodbTables){
+                LOGGER.info("adding table "+tableName);
                 Cluster tableCluster = new Cluster(tableName, region, "DYNAMODB_TABLE");
                 list.add(tableCluster);
             }
             ///////////////end of cluster for dynamotables
-
+            LOGGER.info("crawling beanstalks now...");
             //////////starting adding beanstalk names////
             List<String> beanstalks = awsClient.getBeanStalkNames();
+            LOGGER.info("size of beanstalks..."+beanstalks.size());
             for(String name: beanstalks){
+                LOGGER.info("adding beanstalk "+name);
                 Cluster beanstalkCluster = new Cluster(name, region, "BEANSTALK");
                 list.add(beanstalkCluster);
             }
