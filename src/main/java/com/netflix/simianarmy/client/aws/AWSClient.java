@@ -27,6 +27,8 @@ import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.*;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Tag;
+import com.amazonaws.services.elasticbeanstalk.AWSElasticBeanstalkClient;
+import com.amazonaws.services.elasticbeanstalk.model.EnvironmentDescription;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient;
 import com.amazonaws.services.elasticloadbalancing.model.*;
 import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
@@ -34,6 +36,9 @@ import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRe
 import com.amazonaws.services.elasticloadbalancing.model.DescribeTagsRequest;
 import com.amazonaws.services.elasticloadbalancing.model.DescribeTagsResult;
 import com.amazonaws.services.elasticloadbalancing.model.TagDescription;
+import com.amazonaws.services.logs.AWSLogsClient;
+import com.amazonaws.services.logs.model.DescribeSubscriptionFiltersRequest;
+import com.amazonaws.services.logs.model.DescribeSubscriptionFiltersResult;
 import com.amazonaws.services.route53.AmazonRoute53Client;
 import com.amazonaws.services.route53.model.*;
 import com.amazonaws.services.simpledb.AmazonSimpleDB;
@@ -65,7 +70,7 @@ import com.amazonaws.services.dynamodbv2.model.DescribeTableResult;
 import com.amazonaws.services.dynamodbv2.model.ListTablesRequest;
 import com.amazonaws.services.dynamodbv2.model.ListTablesResult;
 import com.amazonaws.services.dynamodbv2.model.StreamSpecification;
-
+import com.amazonaws.services.logs.model.SubscriptionFilter;
 import java.util.*;
 
 
@@ -346,6 +351,24 @@ public class AWSClient implements CloudClient {
         //client.setEndpoint("elasticloadbalancing." + region + ".amazonaws.com");
         return client;
     }
+
+    protected AWSLogsClient awslogsClient() {
+        AWSLogsClient client;
+        if (awsClientConfig == null) {
+            if (awsCredentialsProvider == null) {
+                client = new AWSLogsClient();
+            } else {
+                client = new AWSLogsClient(awsCredentialsProvider);
+            }
+        } else {
+            if (awsCredentialsProvider == null) {
+                client = new AWSLogsClient(awsClientConfig);
+            } else {
+                client = new AWSLogsClient(awsCredentialsProvider, awsClientConfig);
+            }
+        }
+        return client;
+    }
 	
 	public List<String> getDynamodbTableNames(){
         AmazonDynamoDBClient dynamoDBClient = dynamodbClient();
@@ -363,7 +386,57 @@ public class AWSClient implements CloudClient {
             return false;
         return true;
     }
-    
+
+    public boolean beanstalkHasLogStream(String beanstalkName){
+        AWSLogsClient logClient = awslogsClient();
+        DescribeSubscriptionFiltersRequest request = new DescribeSubscriptionFiltersRequest();
+        //request.setLogGroupName("payment-23-dev-catalina-out");
+        request.setLogGroupName(beanstalkName+"-catalina-out");
+        try{
+            DescribeSubscriptionFiltersResult result = logClient.describeSubscriptionFilters(request);
+            List<SubscriptionFilter> filters = result.getSubscriptionFilters();
+            for(SubscriptionFilter filter : filters) {
+                if (filter.getDestinationArn() != null && !filter.getDestinationArn().isEmpty()) {
+                    return true;
+                }
+            }
+
+        }catch(Exception e){
+            return false;
+        }
+        return false;
+    }
+
+
+    protected AWSElasticBeanstalkClient beanstalkClient(){
+        AWSElasticBeanstalkClient client;
+        if (awsClientConfig == null) {
+            if (awsCredentialsProvider == null) {
+                client = new AWSElasticBeanstalkClient();
+            } else {
+                client = new AWSElasticBeanstalkClient(awsCredentialsProvider);
+            }
+        } else {
+            if (awsCredentialsProvider == null) {
+                client = new AWSElasticBeanstalkClient(awsClientConfig);
+            } else {
+                client = new AWSElasticBeanstalkClient(awsCredentialsProvider, awsClientConfig);
+            }
+        }
+        return client;
+    }
+
+    public List<String> getBeanStalkNames(){
+        AWSElasticBeanstalkClient beanstalkClient = beanstalkClient();
+        List<String> beanstalks = new ArrayList<String>();
+        List<EnvironmentDescription> environments = beanstalkClient.describeEnvironments().getEnvironments();
+        for(EnvironmentDescription environment: environments){
+            beanstalks.add(environment.getEnvironmentName());
+        }
+        return beanstalks;
+    }
+
+
     /**
      * Describe auto scaling groups.
      *

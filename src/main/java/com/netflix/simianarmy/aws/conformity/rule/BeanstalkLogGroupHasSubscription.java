@@ -17,24 +17,24 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Created by Arpan Solanki on 4/26/2017.
+ * Created by Arpan Solanki on 5/4/2017.
  */
-public class DynamoTableHasStream implements ConformityRule {
+public class BeanstalkLogGroupHasSubscription implements ConformityRule {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(InstanceInVPC.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(BeanstalkLogGroupHasSubscription.class);
 
     private final Map<String, AWSClient> regionToAwsClient = Maps.newHashMap();
 
-    private AWSCredentialsProvider awsCredentialsProvider;
+    private static final String RULE_NAME = "BeanstalkLogGroupHasSubscription";
+    private final String reason = "Beanstalk does not have log stream";
 
-    private static final String RULE_NAME = "DynamodbTableHasStream";
-    private static final String REASON = "Stream not defined";
+    private AWSCredentialsProvider awsCredentialsProvider;
 
     /**
      * Constructs an instance with the default AWS credentials provider chain.
      * @see com.amazonaws.auth.DefaultAWSCredentialsProviderChain
      */
-    public DynamoTableHasStream() {
+    public BeanstalkLogGroupHasSubscription() {
         this(new DefaultAWSCredentialsProviderChain());
     }
 
@@ -43,22 +43,32 @@ public class DynamoTableHasStream implements ConformityRule {
      * @param awsCredentialsProvider
      *      The AWS credentials provider
      */
-    public DynamoTableHasStream(AWSCredentialsProvider awsCredentialsProvider) {
+    public BeanstalkLogGroupHasSubscription(AWSCredentialsProvider awsCredentialsProvider) {
         this.awsCredentialsProvider = awsCredentialsProvider;
     }
 
     @Override
+    public String getName() {
+        return RULE_NAME;
+    }
+
+    @Override
+    public String getNonconformingReason() {
+        return reason;
+    }
+
+    @Override
     public Conformity check(Cluster cluster) {
-        Set<String> failedTables = Sets.newHashSet();;
+        Set<String> failedBeanstalks = Sets.newHashSet();;
         Collection<String> failedComponents = Lists.newArrayList();
         AWSClient client = getAwsClient(cluster.getRegion());
-        if(cluster.getType()=="DYNAMODB_TABLE") {
-            boolean hasStream = client.dynamoTableHasStream(cluster.getName());
+        if(cluster.getType()=="BEANSTALK") {
+            boolean hasStream = client.beanstalkHasLogStream(cluster.getName());
             if (!hasStream) {
-                failedTables.add(cluster.getName());
+                failedBeanstalks.add(cluster.getName());
             }
-            failedComponents.addAll(failedTables);
-        }//end of if for dynamodb tables
+            failedComponents.addAll(failedBeanstalks);
+        }
         return new Conformity(getName(), failedComponents);
     }
 
@@ -71,13 +81,4 @@ public class DynamoTableHasStream implements ConformityRule {
         return awsClient;
     }
 
-    @Override
-    public String getName() {
-        return RULE_NAME;
-    }
-
-    @Override
-    public String getNonconformingReason() {
-        return REASON;
-    }
 }
