@@ -41,5 +41,7 @@ public enum AWSResourceType implements ResourceType {
     /** AWS Amazon Machine Image. **/
     IMAGE,
     /** AWS Elastic Load Balancer. **/
-    ELB
+    ELB,
+    /** Elastic Beanstalk **/
+    BEANSTALK
 }
