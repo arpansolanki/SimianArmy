@@ -32,6 +32,7 @@ import com.netflix.simianarmy.aws.janitor.crawler.*;
 import com.netflix.simianarmy.aws.janitor.crawler.edda.*;
 import com.netflix.simianarmy.aws.janitor.rule.ami.UnusedImageRule;
 import com.netflix.simianarmy.aws.janitor.rule.asg.*;
+import com.netflix.simianarmy.aws.janitor.rule.beanstalk.OldAltBeanstalkRule;
 import com.netflix.simianarmy.aws.janitor.rule.elb.OrphanedELBRule;
 import com.netflix.simianarmy.aws.janitor.rule.generic.TagValueExclusionRule;
 import com.netflix.simianarmy.aws.janitor.rule.generic.UntaggedRule;
@@ -155,6 +156,10 @@ public class BasicJanitorMonkeyContext extends BasicSimianArmyContext implements
 
         if (enabledResourceSet.contains("ELB")) {
             janitors.add(getELBJanitor());
+        }
+
+        if (enabledResourceSet.contains("BEANSTALK")){
+            janitors.add(getBeanstalkJanitor());
         }
 
     }
@@ -365,6 +370,23 @@ public class BasicJanitorMonkeyContext extends BasicSimianArmyContext implements
                 monkeyRegion, ruleEngine, crawler, janitorResourceTracker,
                 monkeyCalendar, configuration(), recorder());
         return new LaunchConfigJanitor(awsClient(), janitorCtx);
+    }
+
+    private BeanstalkJanitor getBeanstalkJanitor(){
+        JanitorRuleEngine ruleEngine = createJanitorRuleEngine();
+
+        if (configuration().getBoolOrElse("simianarmy.janitor.rule.oldAltBeanstalk.enabled", false)) {
+            ruleEngine.addRule(new OldAltBeanstalkRule(monkeyCalendar,
+                    (int) configuration().getNumOrElse(
+                            "simianarmy.janitor.rule.oldAltBeanstalk.ageThreshold", 4),
+                    (int) configuration().getNumOrElse(
+                            "simianarmy.janitor.rule.oldAltBeanstalk.retentionDays", 3)));
+        }
+        JanitorCrawler crawler = new BeanstalkJanitorCrawler(awsClient());
+        BasicJanitorContext janitorCtx = new BasicJanitorContext(
+                monkeyRegion, ruleEngine, crawler, janitorResourceTracker,
+                monkeyCalendar, configuration(), recorder());
+        return new BeanstalkJanitor(awsClient(), janitorCtx);
     }
 
     private ImageJanitor getImageJanitor() {

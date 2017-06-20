@@ -22,25 +22,43 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
 import com.amazonaws.services.autoscaling.model.*;
+import com.amazonaws.services.autoscaling.model.AutoScalingGroup;
+import com.amazonaws.services.autoscaling.model.LaunchConfiguration;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
+import com.amazonaws.services.cloudwatch.model.DescribeAlarmsRequest;
+import com.amazonaws.services.cloudwatch.model.DescribeAlarmsResult;
+import com.amazonaws.services.cloudwatch.model.MetricAlarm;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.document.DynamoDB;
+import com.amazonaws.services.dynamodbv2.document.Table;
+import com.amazonaws.services.dynamodbv2.document.TableCollection;
+import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.*;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Tag;
+import com.amazonaws.services.elasticbeanstalk.AWSElasticBeanstalk;
 import com.amazonaws.services.elasticbeanstalk.AWSElasticBeanstalkClient;
-import com.amazonaws.services.elasticbeanstalk.model.EnvironmentDescription;
+import com.amazonaws.services.elasticbeanstalk.model.*;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient;
 import com.amazonaws.services.elasticloadbalancing.model.*;
 import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
 import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersResult;
 import com.amazonaws.services.elasticloadbalancing.model.DescribeTagsRequest;
 import com.amazonaws.services.elasticloadbalancing.model.DescribeTagsResult;
+import com.amazonaws.services.elasticloadbalancing.model.LoadBalancerDescription;
 import com.amazonaws.services.elasticloadbalancing.model.TagDescription;
 import com.amazonaws.services.logs.AWSLogsClient;
 import com.amazonaws.services.logs.model.DescribeSubscriptionFiltersRequest;
 import com.amazonaws.services.logs.model.DescribeSubscriptionFiltersResult;
+import com.amazonaws.services.logs.model.SubscriptionFilter;
 import com.amazonaws.services.route53.AmazonRoute53Client;
 import com.amazonaws.services.route53.model.*;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.simpledb.AmazonSimpleDB;
 import com.amazonaws.services.simpledb.AmazonSimpleDBClient;
 import com.google.common.base.Objects;
@@ -65,12 +83,10 @@ import org.jclouds.ssh.SshClient;
 import org.jclouds.ssh.jsch.config.JschSshClientModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.dynamodbv2.model.DescribeTableResult;
-import com.amazonaws.services.dynamodbv2.model.ListTablesRequest;
-import com.amazonaws.services.dynamodbv2.model.ListTablesResult;
-import com.amazonaws.services.dynamodbv2.model.StreamSpecification;
-import com.amazonaws.services.logs.model.SubscriptionFilter;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.*;
 
 
@@ -327,12 +343,6 @@ public class AWSClient implements CloudClient {
         }
         return client;
     }
-	
-	 /**
-     * Amazon ELB client. Abstracted to aid testing.
-     *
-     * @return the Amazon ELB client
-     */
     protected AmazonDynamoDBClient dynamodbClient() {
         AmazonDynamoDBClient client;
         if (awsClientConfig == null) {
@@ -369,40 +379,30 @@ public class AWSClient implements CloudClient {
         }
         return client;
     }
-	
-	public List<String> getDynamodbTableNames(){
-        AmazonDynamoDBClient dynamoDBClient = dynamodbClient();
-        ListTablesResult result = dynamoDBClient.listTables();
-        List<String> tableNames = result.getTableNames();
-        return tableNames;
-    }
-	
-	public boolean dynamoTableHasStream(String tableName){
-        AmazonDynamoDBClient dynamoDBClient = dynamodbClient();
-        DescribeTableResult describeTableResult = dynamoDBClient.describeTable(tableName);
-        StreamSpecification myStreamSpec =
-                describeTableResult.getTable().getStreamSpecification();
-        if(myStreamSpec==null)
-            return false;
-        return true;
-    }
+
 
     public boolean beanstalkHasLogStream(String beanstalkName){
         AWSLogsClient logClient = awslogsClient();
+        LOGGER.info("checking if beanstalk has log stream "+beanstalkName);
         DescribeSubscriptionFiltersRequest request = new DescribeSubscriptionFiltersRequest();
         //request.setLogGroupName("payment-23-dev-catalina-out");
         request.setLogGroupName(beanstalkName+"-catalina-out");
         try{
             DescribeSubscriptionFiltersResult result = logClient.describeSubscriptionFilters(request);
             List<SubscriptionFilter> filters = result.getSubscriptionFilters();
+            LOGGER.info("after fetching filters....");
             for(SubscriptionFilter filter : filters) {
+                LOGGER.info("Checking filters.......");
                 if (filter.getDestinationArn() != null && !filter.getDestinationArn().isEmpty()) {
                     return true;
                 }
             }
 
         }catch(Exception e){
-            return false;
+            LOGGER.error("some excepiton",e);
+            LOGGER.info("Got exception..returning false..");
+            throw e;
+            //return false;
         }
         return false;
     }
@@ -426,6 +426,42 @@ public class AWSClient implements CloudClient {
         return client;
     }
 
+    protected AmazonCloudWatchClient cloudWatchClient() {
+        AmazonCloudWatchClient client;
+        if (awsClientConfig == null) {
+            if (awsCredentialsProvider == null) {
+                client = new AmazonCloudWatchClient();
+            } else {
+                client = new AmazonCloudWatchClient(awsCredentialsProvider);
+            }
+        } else {
+            if (awsCredentialsProvider == null) {
+                client = new AmazonCloudWatchClient(awsClientConfig);
+            } else {
+                client = new AmazonCloudWatchClient(awsCredentialsProvider, awsClientConfig);
+            }
+        }
+        return client;
+    }
+
+    protected AmazonS3Client s3Client(){
+        AmazonS3Client client;
+        if (awsClientConfig == null) {
+            if (awsCredentialsProvider == null) {
+                client = new AmazonS3Client();
+            } else {
+                client = new AmazonS3Client(awsCredentialsProvider);
+            }
+        } else {
+            if (awsCredentialsProvider == null) {
+                client = new AmazonS3Client(awsClientConfig);
+            } else {
+                client = new AmazonS3Client(awsCredentialsProvider, awsClientConfig);
+            }
+        }
+        return client;
+    }
+
     public List<String> getBeanStalkNames(){
         LOGGER.info("calling beanstalk names method");
         AWSElasticBeanstalkClient beanstalkClient = beanstalkClient();
@@ -440,6 +476,110 @@ public class AWSClient implements CloudClient {
     }
 
 
+    public List<String> getDynamodbTableNames(){
+        AmazonDynamoDBClient dynamoDBClient = dynamodbClient();
+        List<String> tableNames = new ArrayList<String>();
+
+        DynamoDB dynamoDB = new DynamoDB(dynamoDBClient);
+        TableCollection<ListTablesResult> tables = dynamoDB.listTables();
+        Iterator<Table> iterator = tables.iterator();
+
+        while (iterator.hasNext()) {
+            Table table = iterator.next();
+            tableNames.add(table.getTableName());
+        }
+        LOGGER.info("Total number of dynamo tables found "+tableNames.size());
+        return tableNames;
+    }
+
+    public boolean dynamoTableConfiguredToDynamicDDB(String tableName, String bucketName, String key) throws IOException{
+        AmazonS3 s3Client = s3Client();
+        //String key="dynamic-dynamodb.conf";//filename
+        List<String> tableIndexes = getDynamoTableIndexes(tableName);
+        boolean tableFound = false;
+        List<String> foundIndexes = new ArrayList<String>();
+
+        S3Object s3object = s3Client.getObject(new GetObjectRequest(bucketName, key));
+        BufferedReader reader = new BufferedReader(new InputStreamReader(s3object.getObjectContent()));
+
+        while (true) {
+            String line = reader.readLine();
+            if (line == null) break;
+               if(line.contains(tableName)) {
+                   LOGGER.info("found table in config" + tableName);
+                   tableFound = true;
+                }
+                for(String index : tableIndexes){
+                    if(line.contains(index)){
+                        foundIndexes.add(index);
+                    }
+                }
+            }
+            if(!tableFound) {
+                LOGGER.info("Table not found in config " + tableName);
+                return false;
+            }
+
+            for(String index: tableIndexes){
+                if(!foundIndexes.contains(index)){
+                    LOGGER.info("Index not found in config for Index " + index+" Table Name"+ tableName);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+    public List<String> getDynamoTableIndexes(String tableName){
+        List<String> tableIndexes = new ArrayList<String>();
+        AmazonDynamoDBClient dynamoDBClient = dynamodbClient();
+        DynamoDB dynamoDB = new DynamoDB(dynamoDBClient);
+        Table table = dynamoDB.getTable(tableName);
+        TableDescription tableDesc = table.describe();
+        if(tableDesc.getGlobalSecondaryIndexes()!=null){
+            Iterator<GlobalSecondaryIndexDescription> gsiIter = tableDesc.getGlobalSecondaryIndexes().iterator();
+            while (gsiIter.hasNext()) {
+                GlobalSecondaryIndexDescription gsiDesc = gsiIter.next();
+                LOGGER.info("[gsi: "+ gsiDesc.getIndexName() +" table: " +table.getTableName()+"]");
+                tableIndexes.add(gsiDesc.getIndexName());
+            }
+        }//end of if
+        return tableIndexes;
+    }
+
+
+    public boolean dynamoTableHasStream(String tableName){
+        AmazonDynamoDBClient dynamoDBClient = dynamodbClient();
+        LOGGER.info("checking dynamo has stream...."+tableName);
+        DescribeTableResult describeTableResult = dynamoDBClient.describeTable(tableName);
+        LOGGER.info("after describing table result....");
+        StreamSpecification myStreamSpec =
+                describeTableResult.getTable().getStreamSpecification();
+        LOGGER.info("After getting stream spec...");
+        if(myStreamSpec==null)
+        {   LOGGER.info("my stream spec is null..returning false...");
+            return false;}
+        LOGGER.info("returning true.....");
+        return true;
+    }
+
+    public boolean dynamoTableHasAlarm(String tableName, String snsArn){
+        AmazonCloudWatchClient cloudWatchClient = cloudWatchClient();
+        DescribeAlarmsRequest request = new DescribeAlarmsRequest();
+        request.setActionPrefix(snsArn);
+        request.setAlarmNamePrefix(tableName);
+        DescribeAlarmsResult response = cloudWatchClient.describeAlarms(request);
+        LOGGER.info("After getting response from cloudwatch client...");
+
+        for(MetricAlarm alarm : response.getMetricAlarms()) {
+            if(alarm.getAlarmName().contains("Throttle")){
+                LOGGER.info("Throttle Alarm found for table"+tableName);
+                return true;
+            }
+        }
+        LOGGER.info("No alarm found... ");
+        return false;
+    }
     /**
      * Describe auto scaling groups.
      *
@@ -501,6 +641,21 @@ public class AWSClient implements CloudClient {
         List<LoadBalancerDescription> elbs = result.getLoadBalancerDescriptions();
         LOGGER.info(String.format("Got %d ELBs in region %s.", elbs.size(), region));
         return elbs;
+    }
+
+    public List<EnvironmentDescription> describeBeanstalks(String... ids){
+        if (ids == null || ids.length == 0) {
+            LOGGER.info(String.format("Getting all Beanstalks in region %s.", region));
+        } else {
+            LOGGER.info(String.format("Getting Beanstalks for %d names in region %s.", ids.length, region));
+        }
+
+        AWSElasticBeanstalk beanstalkClient = beanstalkClient();
+        DescribeEnvironmentsRequest request = new DescribeEnvironmentsRequest().withEnvironmentIds(ids);
+        DescribeEnvironmentsResult result = beanstalkClient.describeEnvironments(request);
+        List<EnvironmentDescription> environments = result.getEnvironments();
+        LOGGER.info(String.format("Got %d Beanstalks in region %s.", environments.size(), region));
+        return environments;
     }
 
     /**
@@ -696,6 +851,15 @@ public class AWSClient implements CloudClient {
         AmazonElasticLoadBalancingClient elbClient = elbClient();
         DeleteLoadBalancerRequest request = new DeleteLoadBalancerRequest(elbId);
         elbClient.deleteLoadBalancer(request);
+    }
+
+    public void deleteBeanstalk(String beanstalkId){
+        Validate.notEmpty(beanstalkId);
+        LOGGER.info(String.format("Deleting Beanstalk %s in region %s.", beanstalkId, region));
+        AWSElasticBeanstalkClient beanstalkClient = beanstalkClient();
+        TerminateEnvironmentRequest request = new TerminateEnvironmentRequest();
+        request.setEnvironmentId(beanstalkId);
+        beanstalkClient.terminateEnvironment(request);
     }
 
     /** {@inheritDoc} */
