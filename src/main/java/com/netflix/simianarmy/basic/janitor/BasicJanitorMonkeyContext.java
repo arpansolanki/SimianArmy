@@ -30,6 +30,7 @@ import com.netflix.simianarmy.MonkeyRecorder;
 import com.netflix.simianarmy.aws.janitor.*;
 import com.netflix.simianarmy.aws.janitor.crawler.*;
 import com.netflix.simianarmy.aws.janitor.crawler.edda.*;
+import com.netflix.simianarmy.aws.janitor.rule.alarm.AlarmWithoutASGRule;
 import com.netflix.simianarmy.aws.janitor.rule.ami.UnusedImageRule;
 import com.netflix.simianarmy.aws.janitor.rule.asg.*;
 import com.netflix.simianarmy.aws.janitor.rule.beanstalk.OldAltBeanstalkRule;
@@ -160,6 +161,10 @@ public class BasicJanitorMonkeyContext extends BasicSimianArmyContext implements
 
         if (enabledResourceSet.contains("BEANSTALK")){
             janitors.add(getBeanstalkJanitor());
+        }
+
+        if (enabledResourceSet.contains("ALARM")){
+            janitors.add(getAlarmJanitor());
         }
 
     }
@@ -370,6 +375,21 @@ public class BasicJanitorMonkeyContext extends BasicSimianArmyContext implements
                 monkeyRegion, ruleEngine, crawler, janitorResourceTracker,
                 monkeyCalendar, configuration(), recorder());
         return new LaunchConfigJanitor(awsClient(), janitorCtx);
+    }
+
+    private AlarmJanitor getAlarmJanitor(){
+        JanitorRuleEngine ruleEngine = createJanitorRuleEngine();
+
+        if (configuration().getBoolOrElse("simianarmy.janitor.rule.alarmWithoutASG.enabled.enabled", false)) {
+            ruleEngine.addRule(new AlarmWithoutASGRule(monkeyCalendar,
+                    (int) configuration().getNumOrElse(
+                            "simianarmy.janitor.rule.alarmWithoutASG.enabled.retentionDays", 2)));
+        }
+        JanitorCrawler crawler = new AlarmJanitorCrawler(awsClient());
+        BasicJanitorContext janitorCtx = new BasicJanitorContext(
+                monkeyRegion, ruleEngine, crawler, janitorResourceTracker,
+                monkeyCalendar, configuration(), recorder());
+        return new AlarmJanitor(awsClient(), janitorCtx);
     }
 
     private BeanstalkJanitor getBeanstalkJanitor(){

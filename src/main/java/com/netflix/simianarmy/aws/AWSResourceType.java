@@ -43,5 +43,7 @@ public enum AWSResourceType implements ResourceType {
     /** AWS Elastic Load Balancer. **/
     ELB,
     /** Elastic Beanstalk **/
-    BEANSTALK
+    BEANSTALK,
+    /** Cloudwatch Alarm **/
+    ALARM
 }

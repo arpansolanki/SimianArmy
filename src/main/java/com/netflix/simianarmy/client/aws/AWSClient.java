@@ -25,9 +25,7 @@ import com.amazonaws.services.autoscaling.model.*;
 import com.amazonaws.services.autoscaling.model.AutoScalingGroup;
 import com.amazonaws.services.autoscaling.model.LaunchConfiguration;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
-import com.amazonaws.services.cloudwatch.model.DescribeAlarmsRequest;
-import com.amazonaws.services.cloudwatch.model.DescribeAlarmsResult;
-import com.amazonaws.services.cloudwatch.model.MetricAlarm;
+import com.amazonaws.services.cloudwatch.model.*;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Table;
@@ -61,6 +59,7 @@ import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.simpledb.AmazonSimpleDB;
 import com.amazonaws.services.simpledb.AmazonSimpleDBClient;
+import com.amazonaws.services.cloudwatch.model.Dimension;
 import com.google.common.base.Objects;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
@@ -622,6 +621,49 @@ public class AWSClient implements CloudClient {
         return asgs;
     }
 
+    public List<MetricAlarm> describeAlarms(String... names){
+        if (names == null || names.length == 0) {
+            LOGGER.info(String.format("Getting all Alarms in region %s.", region));
+        } else {
+            LOGGER.info(String.format("Getting Alarms for %d names in region %s.", names.length, region));
+        }
+
+        AmazonCloudWatchClient client = cloudWatchClient();
+        DescribeAlarmsRequest request = new DescribeAlarmsRequest()
+                .withAlarmNames(names)
+                .withStateValue(StateValue.INSUFFICIENT_DATA)
+                .withAlarmNamePrefix("awseb");
+
+        DescribeAlarmsResult result = client.describeAlarms(request);
+        return result.getMetricAlarms();
+    }
+
+    public boolean isDanglingASGAlarm(MetricAlarm alarm){
+        if(alarm.getDimensions()!=null){
+            for(Dimension dimension : alarm.getDimensions()){
+                if(dimension.getName().equals("AutoScalingGroupName")){
+                    if(!isValidASGName(dimension.getValue())){
+                        LOGGER.info("Dimension name %s dimension Value %s",dimension.getName(), dimension.getValue());
+                        LOGGER.info("Alarm %s has dimension ASG but ASG does not exists %s",alarm.getAlarmName());
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    public boolean isValidASGName(String name){
+        AmazonAutoScalingClient asgClient = asgClient();
+        DescribeAutoScalingGroupsRequest request = new DescribeAutoScalingGroupsRequest().withAutoScalingGroupNames(name);
+        DescribeAutoScalingGroupsResult result = asgClient.describeAutoScalingGroups(request);
+        if(result.getAutoScalingGroups().size()==0) {
+            LOGGER.info("ASG name %s is not valid ASG", name);
+            return false;
+        }
+        return true;
+    }
+
     /**
      * Describe a set of specific ELBs.
      *
@@ -860,6 +902,14 @@ public class AWSClient implements CloudClient {
         TerminateEnvironmentRequest request = new TerminateEnvironmentRequest();
         request.setEnvironmentId(beanstalkId);
         beanstalkClient.terminateEnvironment(request);
+    }
+
+    public void deleteAlarm(String alarmName){
+        Validate.notEmpty(alarmName);
+        LOGGER.info(String.format("Deleting Alarm %s in region %s.", alarmName, region));
+        AmazonCloudWatchClient client = cloudWatchClient();
+        DeleteAlarmsRequest request = new DeleteAlarmsRequest().withAlarmNames(alarmName);
+        client.deleteAlarms(request);
     }
 
     /** {@inheritDoc} */
