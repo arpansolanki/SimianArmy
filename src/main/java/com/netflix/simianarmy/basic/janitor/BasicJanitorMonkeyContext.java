@@ -380,10 +380,10 @@ public class BasicJanitorMonkeyContext extends BasicSimianArmyContext implements
     private AlarmJanitor getAlarmJanitor(){
         JanitorRuleEngine ruleEngine = createJanitorRuleEngine();
 
-        if (configuration().getBoolOrElse("simianarmy.janitor.rule.alarmWithoutASG.enabled.enabled", false)) {
+        if (configuration().getBoolOrElse("simianarmy.janitor.rule.alarmWithoutASG.enabled", false)) {
             ruleEngine.addRule(new AlarmWithoutASGRule(monkeyCalendar,
                     (int) configuration().getNumOrElse(
-                            "simianarmy.janitor.rule.alarmWithoutASG.enabled.retentionDays", 2)));
+                            "simianarmy.janitor.rule.alarmWithoutASG.retentionDays", 1)));
         }
         JanitorCrawler crawler = new AlarmJanitorCrawler(awsClient());
         BasicJanitorContext janitorCtx = new BasicJanitorContext(
